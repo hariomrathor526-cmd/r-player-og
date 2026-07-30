@@ -125,7 +125,7 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
   });
   patch(Document.prototype, "location", function(){ return fake; });
   window.__mirrorLocation = fake;
-  = windowProxy;
+  window.__mirrorScope = windowProxy;
 })();
 </script>`;
 
