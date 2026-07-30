@@ -20,7 +20,7 @@ const PERSON_TO = "Mr. Marco";
  * sits inside a URL-ish token (preceded by `/`, `.`, `-` or followed by `.cc`)
  * is skipped.
  */
-const BRAND_FROM = /(^|[^\w./-])(study[\s._-]*ratna|ratna)(?![\w-]*\.[a-z]{2,})/gi;
+const BRAND_FROM = /(^|[^\w./-])(study[\s._-]*ratna|ratna)(?![\w-])(?!\.[a-z]{2,})/gi;
 const BRAND_TO = "PW-MARCO";
 
 export function rebrand(text: string): string {
