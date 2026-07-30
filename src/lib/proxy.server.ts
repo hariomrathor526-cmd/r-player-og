@@ -105,6 +105,9 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
     get: function(t, k){
       if (k === "location") return fake;
       if (k === "window" || k === "self" || k === "globalThis" || k === "top" || k === "parent") return windowProxy;
+      // eval must stay the exact intrinsic, otherwise direct eval becomes
+      // indirect eval and the bundle loses its closure scope.
+      if (k === "eval" || k === "Function") return t[k];
       var v = t[k];
       if (typeof v !== "function") return v;
       var cached = fnCache.get(v);
