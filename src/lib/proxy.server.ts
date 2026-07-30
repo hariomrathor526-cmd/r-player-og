@@ -137,6 +137,28 @@ function wrapLockedScript(source: string): string {
 }
 
 
+
+/** Paths whose INLINE scripts are domain-locked and must run in the mirror scope. */
+const LOCKED_INLINE_HTML = [/^\/play\.php$/i, /player/i];
+
+/**
+ * Top-level `with (...)` keeps var/function declarations global (sloppy mode),
+ * so inline origin scripts keep exporting their globals while `location`
+ * resolves to the spoofed origin location.
+ */
+function wrapInlineScripts(html: string): string {
+  return html.replace(
+    /<script(?![^>]*\ssrc=)([^>]*)>([\s\S]*?)<\/script>/gi,
+    (match, attrs: string, body: string) => {
+      if (/data-mirror-(shim|override)/i.test(attrs)) return match;
+      if (/type\s*=\s*["']?(module|application\/json|application\/ld\+json|text\/template)/i.test(attrs))
+        return match;
+      if (!body.trim()) return match;
+      return `<script${attrs}>with (window.__mirrorScope || window) {\n${body}\n}</script>`;
+    },
+  );
+}
+
 /**
  * Inline script injected into every proxied HTML document. Keeps the mirror
  * independent from any future login / key-verification gate added on the
@@ -277,6 +299,10 @@ function injectHtml(html: string, upstream: URL): string {
     out = /<head[^>]*>/i.test(out)
       ? out.replace(/<head[^>]*>/i, (m) => `${m}\n${shim}`)
       : shim + out;
+  }
+
+  if (LOCKED_INLINE_HTML.some((re) => re.test(upstream.pathname))) {
+    out = wrapInlineScripts(out);
   }
 
   if (!INJECT_OVERRIDE) return out;
