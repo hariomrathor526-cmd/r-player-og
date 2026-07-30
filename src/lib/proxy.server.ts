@@ -60,6 +60,10 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
     try { var p = new URL(u, location.href); return p.host === location.host ? O + p.pathname + p.search + p.hash : u; }
     catch (e) { return u; }
   }
+  function unmap(u){
+    try { var p = new URL(u, real.href); return p.host === HN || p.host === H ? real.origin + p.pathname + p.search + p.hash : u; }
+    catch (e) { return u; }
+  }
   function patch(proto, prop, get){
     try {
       var d = Object.getOwnPropertyDescriptor(proto, prop);
@@ -78,7 +82,7 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
   var real = window.location;
   var fake = {
     get href(){ return map(real.href); },
-    set href(v){ real.href = v; },
+    set href(v){ real.href = unmap(v); },
     get host(){ return H; },
     get hostname(){ return HN; },
     get origin(){ return O; },
@@ -90,8 +94,8 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
     set pathname(v){ real.pathname = v; },
     set search(v){ real.search = v; },
     set hash(v){ real.hash = v; },
-    assign: function(u){ return real.assign(u); },
-    replace: function(u){ return real.replace(u); },
+    assign: function(u){ return real.assign(unmap(u)); },
+    replace: function(u){ return real.replace(unmap(u)); },
     reload: function(){ return real.reload(); },
     toString: function(){ return map(real.href); },
   };
@@ -106,6 +110,7 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
     },
     get: function(t, k){
       if (k === "location") return fake;
+      if (k === "origin") return O;
       if (k === "window" || k === "self" || k === "globalThis" || k === "top" || k === "parent") return windowProxy;
       // eval must stay the exact intrinsic, otherwise direct eval becomes
       // indirect eval and the bundle loses its closure scope.
@@ -134,6 +139,46 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
 /** Wraps a domain-locked origin bundle so its global scope sees the spoofed host. */
 function wrapLockedScript(source: string): string {
   return `;(function(){ with (window.__mirrorScope || window) { ${source}\n} })();`;
+}
+
+
+
+/** Paths whose INLINE scripts are domain-locked and must run in the mirror scope. */
+const LOCKED_INLINE_HTML = [/^\/play\.php$/i, /player/i];
+
+/**
+ * Rewrites bare `location` reads inside inline origin scripts to the spoofed
+ * origin location. A `with (...)` wrapper cannot be used here: function
+ * declarations inside a `with` block stop being global, which breaks the
+ * player's inline handlers.
+ */
+function wrapInlineScripts(html: string): string {
+  return html.replace(
+    /<script(?![^>]*\ssrc=)([^>]*)>([\s\S]*?)<\/script>/gi,
+    (match, attrs: string, body: string) => {
+      if (/data-mirror-(shim|override)/i.test(attrs)) return match;
+      if (/type\s*=\s*["']?(module|application\/json|application\/ld\+json|text\/template)/i.test(attrs))
+        return match;
+      if (!body.trim()) return match;
+      // Heavily obfuscated origin bundles resolve identifiers at runtime via
+      // eval, so a textual rewrite cannot reach them: run them in the scope
+      // proxy instead.
+      if (/eval\(/.test(body) && /[\u0250-\u2C7F]/.test(body)) {
+        return `<script${attrs}>with (window.__mirrorScope || window) {\n${body}\n}</script>`;
+      }
+      const patched = body
+        .replace(
+          /(^|[^\w$.'"`])(?:window\s*\.\s*|document\s*\.\s*)?location(\s*\.)/g,
+          (m, pre: string, post: string) =>
+            `${pre}(window.__mirrorLocation||location)${post}`,
+        )
+        .replace(
+          /(^|[^\w$.'"`])document\s*\.\s*domain\b/g,
+          (m, pre: string) => `${pre}((window.__mirrorLocation||location).hostname)`,
+        );
+      return `<script${attrs}>${patched}</script>`;
+    },
+  );
 }
 
 
@@ -277,6 +322,10 @@ function injectHtml(html: string, upstream: URL): string {
     out = /<head[^>]*>/i.test(out)
       ? out.replace(/<head[^>]*>/i, (m) => `${m}\n${shim}`)
       : shim + out;
+  }
+
+  if (LOCKED_INLINE_HTML.some((re) => re.test(upstream.pathname))) {
+    out = wrapInlineScripts(out);
   }
 
   if (!INJECT_OVERRIDE) return out;
