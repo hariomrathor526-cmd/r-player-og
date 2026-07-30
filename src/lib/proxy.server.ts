@@ -111,7 +111,6 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
     get: function(t, k){
       if (k === "location") return fake;
       if (k === "origin") return O;
-      if (k === "name" && typeof t.name === "string" && t.name === "") return "";
       if (k === "window" || k === "self" || k === "globalThis" || k === "top" || k === "parent") return windowProxy;
       // eval must stay the exact intrinsic, otherwise direct eval becomes
       // indirect eval and the bundle loses its closure scope.
