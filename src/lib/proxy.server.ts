@@ -142,9 +142,10 @@ function wrapLockedScript(source: string): string {
 const LOCKED_INLINE_HTML = [/^\/play\.php$/i, /player/i];
 
 /**
- * Top-level `with (...)` keeps var/function declarations global (sloppy mode),
- * so inline origin scripts keep exporting their globals while `location`
- * resolves to the spoofed origin location.
+ * Rewrites bare `location` reads inside inline origin scripts to the spoofed
+ * origin location. A `with (...)` wrapper cannot be used here: function
+ * declarations inside a `with` block stop being global, which breaks the
+ * player's inline handlers.
  */
 function wrapInlineScripts(html: string): string {
   return html.replace(
@@ -154,10 +155,21 @@ function wrapInlineScripts(html: string): string {
       if (/type\s*=\s*["']?(module|application\/json|application\/ld\+json|text\/template)/i.test(attrs))
         return match;
       if (!body.trim()) return match;
-      return `<script${attrs}>with (window.__mirrorScope || window) {\n${body}\n}</script>`;
+      const patched = body
+        .replace(
+          /(^|[^\w$.'"`])(?:window\s*\.\s*|document\s*\.\s*)?location(\s*\.)/g,
+          (m, pre: string, post: string) =>
+            `${pre}(window.__mirrorLocation||location)${post}`,
+        )
+        .replace(
+          /(^|[^\w$.'"`])document\s*\.\s*domain\b/g,
+          (m, pre: string) => `${pre}((window.__mirrorLocation||location).hostname)`,
+        );
+      return `<script${attrs}>${patched}</script>`;
     },
   );
 }
+
 
 /**
  * Inline script injected into every proxied HTML document. Keeps the mirror
