@@ -97,7 +97,7 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
   };
   var fnCache = new WeakMap();
   var windowProxy = new Proxy(window, {
-    has: function(t, k){ return k === "location" || k in t; },
+    has: function(t, k){ return k === "location"; },
     getOwnPropertyDescriptor: function(t, k){
       if (k === Symbol.unscopables) return undefined;
       return Object.getOwnPropertyDescriptor(t, k);
@@ -131,7 +131,7 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
 
 /** Wraps a domain-locked origin bundle so its global scope sees the spoofed host. */
 function wrapLockedScript(source: string): string {
-  return `;(function(){ with (window) { ${source}\n} })();`;
+  return `;(function(){ with (window.__mirrorScope || window) { ${source}\n} })();`;
 }
 
 
