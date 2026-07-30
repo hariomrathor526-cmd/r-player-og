@@ -4,7 +4,7 @@ import { getOverrideUrl } from "./mirror-asset-overrides";
 const LOCKED_SCRIPTS = new Set(["/script-v40.js"]);
 
 /** Set to false to serve origin HTML completely untouched. */
-const INJECT_OVERRIDE = true;
+const INJECT_OVERRIDE = false;
 
 
 /**
