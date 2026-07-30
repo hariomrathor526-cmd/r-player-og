@@ -401,15 +401,24 @@ export async function proxyRequest(request: Request): Promise<Response> {
   const headers = buildDownstreamHeaders(upstreamResponse, upstream);
 
   if (isHtml(upstreamResponse) && upstreamResponse.status < 400) {
-    const html = injectHtml(await upstreamResponse.text(), upstream);
+    const html = rebrand(injectHtml(await upstreamResponse.text(), upstream));
     headers.delete("content-length");
     return new Response(html, { status: upstreamResponse.status, headers });
   }
 
   if (LOCKED_SCRIPTS.has(upstream.pathname) && upstreamResponse.status < 400) {
-    const js = wrapLockedScript(await upstreamResponse.text());
+    const js = rebrand(wrapLockedScript(await upstreamResponse.text()));
     headers.delete("content-length");
     return new Response(js, { status: upstreamResponse.status, headers });
+  }
+
+  if (
+    upstreamResponse.status < 400 &&
+    isRebrandable(upstreamResponse.headers.get("content-type") ?? "")
+  ) {
+    const body = rebrand(await upstreamResponse.text());
+    headers.delete("content-length");
+    return new Response(body, { status: upstreamResponse.status, headers });
   }
 
 
