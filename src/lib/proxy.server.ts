@@ -131,7 +131,7 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
 
 /** Wraps a domain-locked origin bundle so its global scope sees the spoofed host. */
 function wrapLockedScript(source: string): string {
-  return `;(function(){ with (|| window) { ${source}\n} })();`;
+  return `;(function(){ with (window) { ${source}\n} })();`;
 }
 
 
