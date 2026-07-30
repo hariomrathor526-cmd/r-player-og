@@ -139,7 +139,7 @@ function wrapLockedScript(source: string): string {
 
 
 /** Paths whose INLINE scripts are domain-locked and must run in the mirror scope. */
-const LOCKED_INLINE_HTML = [/^\/play\.php$/i, /player/i];
+const LOCKED_INLINE_HTML: RegExp[] = [];
 
 /**
  * Rewrites bare `location` reads inside inline origin scripts to the spoofed
