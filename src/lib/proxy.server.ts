@@ -1,3 +1,4 @@
+import { isRebrandable, rebrand } from "./mirror-branding";
 import { getOverrideUrl } from "./mirror-asset-overrides";
 
 /** Origin bundles that are domain-locked and must run inside the mirror scope. */
@@ -133,6 +134,42 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
   patch(Document.prototype, "location", function(){ return fake; });
   window.__mirrorLocation = fake;
   window.__mirrorScope = windowProxy;
+
+  // Because the page believes it lives on the origin host, app code builds
+  // absolute origin URLs for its own APIs. Those would be cross-origin here
+  // and get blocked by CORS, so send them back through the mirror.
+  function toMirror(u){
+    try {
+      var p = new URL(String(u), real.href);
+      if (p.hostname === HN) return real.origin + p.pathname + p.search + p.hash;
+      return u;
+    } catch (e) { return u; }
+  }
+  var nativeFetch = window.fetch;
+  if (nativeFetch) {
+    window.fetch = function(input, init){
+      try {
+        if (typeof input === "string" || input instanceof URL) {
+          input = toMirror(input);
+        } else if (input && input.url) {
+          var mapped = toMirror(input.url);
+          if (mapped !== input.url) input = new Request(mapped, input);
+        }
+      } catch (e) {}
+      return nativeFetch.call(this, input, init);
+    };
+  }
+  var xhrOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url){
+    var args = Array.prototype.slice.call(arguments);
+    args[1] = toMirror(url);
+    return xhrOpen.apply(this, args);
+  };
+  if (navigator.sendBeacon) {
+    var beacon = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = function(url, data){ return beacon(toMirror(url), data); };
+  }
+  window.__mirrorToMirror = toMirror;
 })();
 </script>`;
 
@@ -365,15 +402,24 @@ export async function proxyRequest(request: Request): Promise<Response> {
   const headers = buildDownstreamHeaders(upstreamResponse, upstream);
 
   if (isHtml(upstreamResponse) && upstreamResponse.status < 400) {
-    const html = injectHtml(await upstreamResponse.text(), upstream);
+    const html = rebrand(injectHtml(await upstreamResponse.text(), upstream));
     headers.delete("content-length");
     return new Response(html, { status: upstreamResponse.status, headers });
   }
 
   if (LOCKED_SCRIPTS.has(upstream.pathname) && upstreamResponse.status < 400) {
-    const js = wrapLockedScript(await upstreamResponse.text());
+    const js = rebrand(wrapLockedScript(await upstreamResponse.text()));
     headers.delete("content-length");
     return new Response(js, { status: upstreamResponse.status, headers });
+  }
+
+  if (
+    upstreamResponse.status < 400 &&
+    isRebrandable(upstreamResponse.headers.get("content-type") ?? "")
+  ) {
+    const body = rebrand(await upstreamResponse.text());
+    headers.delete("content-length");
+    return new Response(body, { status: upstreamResponse.status, headers });
   }
 
 
