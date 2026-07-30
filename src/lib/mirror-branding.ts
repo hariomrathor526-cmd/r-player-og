@@ -3,7 +3,8 @@
  * Names, the community link and the logo are swapped for the mirror's own.
  */
 
-const TELEGRAM_FROM = /https?:\/\/t\.me\/\+detG3qtCyHs3M2Rl/gi;
+const TELEGRAM_FROM =
+  /https?:\/\/t\.me\/(?:\+detG3qtCyHs3M2Rl|[\w+]*ratna[\w+]*)/gi;
 const TELEGRAM_TO = "https://t.me/official_marco_22";
 
 const LOGO_FROM =
