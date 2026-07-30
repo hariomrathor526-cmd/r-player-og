@@ -1,3 +1,4 @@
+import { isRebrandable, rebrand } from "./mirror-branding";
 import { getOverrideUrl } from "./mirror-asset-overrides";
 
 /** Origin bundles that are domain-locked and must run inside the mirror scope. */
