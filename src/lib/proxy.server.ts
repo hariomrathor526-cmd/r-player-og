@@ -97,7 +97,11 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
   };
   var fnCache = new WeakMap();
   var windowProxy = new Proxy(window, {
-    has: function(t, k){ return k === "location"; },
+    has: function(t, k){
+      if (k === "location") return true;
+      var d = Object.getOwnPropertyDescriptor(t, k);
+      return !!(d && d.configurable === false);
+    },
     getOwnPropertyDescriptor: function(t, k){
       if (k === Symbol.unscopables) return undefined;
       return Object.getOwnPropertyDescriptor(t, k);
