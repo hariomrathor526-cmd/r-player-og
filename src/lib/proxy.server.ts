@@ -133,6 +133,42 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
   patch(Document.prototype, "location", function(){ return fake; });
   window.__mirrorLocation = fake;
   window.__mirrorScope = windowProxy;
+
+  // Because the page believes it lives on the origin host, app code builds
+  // absolute origin URLs for its own APIs. Those would be cross-origin here
+  // and get blocked by CORS, so send them back through the mirror.
+  function toMirror(u){
+    try {
+      var p = new URL(String(u), real.href);
+      if (p.hostname === HN) return real.origin + p.pathname + p.search + p.hash;
+      return u;
+    } catch (e) { return u; }
+  }
+  var nativeFetch = window.fetch;
+  if (nativeFetch) {
+    window.fetch = function(input, init){
+      try {
+        if (typeof input === "string" || input instanceof URL) {
+          input = toMirror(input);
+        } else if (input && input.url) {
+          var mapped = toMirror(input.url);
+          if (mapped !== input.url) input = new Request(mapped, input);
+        }
+      } catch (e) {}
+      return nativeFetch.call(this, input, init);
+    };
+  }
+  var xhrOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url){
+    var args = Array.prototype.slice.call(arguments);
+    args[1] = toMirror(url);
+    return xhrOpen.apply(this, args);
+  };
+  if (navigator.sendBeacon) {
+    var beacon = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = function(url, data){ return beacon(toMirror(url), data); };
+  }
+  window.__mirrorToMirror = toMirror;
 })();
 </script>`;
 
