@@ -1,0 +1,2 @@
+  = windowProxy;
+  return `;(function(){ with (|| window) { ${source}\n} })();`;
