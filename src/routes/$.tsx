@@ -5,11 +5,14 @@ const proxy = async ({ request }: { request: Request }) => {
   return proxyRequest(request);
 };
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/$")({
   server: {
     handlers: {
       GET: proxy,
       POST: proxy,
+      PUT: proxy,
+      PATCH: proxy,
+      DELETE: proxy,
       HEAD: proxy,
       OPTIONS: proxy,
     },
