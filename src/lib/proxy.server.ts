@@ -1,5 +1,12 @@
 import { isRebrandable, rebrand } from "./mirror-branding";
 import { getOverrideUrl } from "./mirror-asset-overrides";
+import {
+  GATE_BYPASS_COOKIES,
+  GATE_ENABLED,
+  GATE_GUARD_SCRIPT,
+  isGatePath,
+  isGateUrl,
+} from "./mirror-gate";
 
 /** Origin bundles that are domain-locked and must run inside the mirror scope. */
 const LOCKED_SCRIPTS = new Set(["/script-v40.js"]);
@@ -290,6 +297,14 @@ function buildUpstreamHeaders(request: Request, upstream: URL): Headers {
   const origin = new URL(ORIGIN_BASE);
   headers.set("origin", origin.origin);
 
+  if (!GATE_ENABLED) {
+    const existing = headers.get("cookie");
+    headers.set(
+      "cookie",
+      existing ? `${existing}; ${GATE_BYPASS_COOKIES}` : GATE_BYPASS_COOKIES,
+    );
+  }
+
   const referer = request.headers.get("referer");
   if (referer) {
     try {
@@ -381,6 +396,13 @@ function injectHtml(html: string, upstream: URL): string {
       : shim + out;
   }
 
+  // Gate guard runs right after the host shim, before any origin script.
+  if (!GATE_ENABLED && !out.includes("data-mirror-gate")) {
+    out = /<head[^>]*>/i.test(out)
+      ? out.replace(/<head[^>]*>/i, (m) => `${m}\n${GATE_GUARD_SCRIPT}`)
+      : GATE_GUARD_SCRIPT + out;
+  }
+
   if (LOCKED_INLINE_HTML.some((re) => re.test(upstream.pathname))) {
     out = wrapInlineScripts(out);
   }
@@ -398,6 +420,17 @@ export async function proxyRequest(request: Request): Promise<Response> {
   const upstream = buildUpstreamUrl(request);
   const method = request.method.toUpperCase();
   const hasBody = method !== "GET" && method !== "HEAD";
+
+  // Locked gate paths: frozen at their current (non-existent) origin state.
+  if (!GATE_ENABLED && isGatePath(upstream.pathname)) {
+    if (method === "GET" || method === "HEAD") {
+      return new Response(null, { status: 302, headers: { location: "/" } });
+    }
+    return new Response(JSON.stringify({ status: true, verified: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
 
   const override = getOverrideUrl(upstream.pathname);
   if (override && (method === "GET" || method === "HEAD")) {
@@ -420,6 +453,14 @@ export async function proxyRequest(request: Request): Promise<Response> {
   }
 
   const headers = buildDownstreamHeaders(upstreamResponse, upstream);
+
+  // Never let the origin redirect our users into a future gate page.
+  if (!GATE_ENABLED && upstreamResponse.status >= 300 && upstreamResponse.status < 400) {
+    const loc = headers.get("location");
+    if (loc && isGateUrl(loc, upstream.toString())) {
+      headers.set("location", "/");
+    }
+  }
 
   if (isHtml(upstreamResponse) && upstreamResponse.status < 400) {
     const html = rebrand(injectHtml(await upstreamResponse.text(), upstream));
