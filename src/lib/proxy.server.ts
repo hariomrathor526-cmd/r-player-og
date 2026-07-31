@@ -18,7 +18,8 @@ const INJECT_OVERRIDE = false;
 
 const ORIGIN_BASE = process.env.ORIGIN_BASE ?? "https://s2-cdn.studyratna.cc";
 const MEDIA_PROXY_PREFIX = "/__media_proxy__/";
-const MEDIA_PROXY_HOST = "huskify.radha-naam.site";
+// Hosts that should never be routed through the media proxy (same-origin app
+// paths or the origin host itself, which is handled by the main proxy).
 
 /** Request headers we never forward upstream. */
 const STRIPPED_REQUEST_HEADERS = new Set([
@@ -144,10 +145,11 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
     try {
       var p = new URL(String(u), real.href);
       if (p.hostname === HN) return real.origin + p.pathname + p.search + p.hash;
-      if (p.hostname === ${JSON.stringify(MEDIA_PROXY_HOST)}) {
-        return real.origin + ${JSON.stringify(MEDIA_PROXY_PREFIX)} + p.pathname.replace(/^\\//, "") + p.search + p.hash;
-      }
-      return u;
+      if (p.hostname === real.hostname) return u;
+      if (p.protocol !== "http:" && p.protocol !== "https:") return u;
+      // Route every other cross-origin request through the mirror so the
+      // response is same-origin and CORS-safe.
+      return real.origin + ${JSON.stringify(MEDIA_PROXY_PREFIX)} + p.host + p.pathname + p.search + p.hash;
     } catch (e) { return u; }
   }
   var nativeFetch = window.fetch;
@@ -264,9 +266,11 @@ export function getOriginBase(): string {
 function buildUpstreamUrl(request: Request): URL {
   const incoming = new URL(request.url);
   if (incoming.pathname.startsWith(MEDIA_PROXY_PREFIX)) {
-    const mediaPath = incoming.pathname.slice(MEDIA_PROXY_PREFIX.length);
-    const mediaUpstream = new URL(`https://${MEDIA_PROXY_HOST}/`);
-    mediaUpstream.pathname = `/${mediaPath}`;
+    const rest = incoming.pathname.slice(MEDIA_PROXY_PREFIX.length);
+    const slash = rest.indexOf("/");
+    const host = slash === -1 ? rest : rest.slice(0, slash);
+    const subpath = slash === -1 ? "/" : rest.slice(slash);
+    const mediaUpstream = new URL(`https://${host}${subpath}`);
     mediaUpstream.search = incoming.search;
     return mediaUpstream;
   }
