@@ -17,6 +17,8 @@ const INJECT_OVERRIDE = false;
  */
 
 const ORIGIN_BASE = process.env.ORIGIN_BASE ?? "https://s2-cdn.studyratna.cc";
+const MEDIA_PROXY_PREFIX = "/__media_proxy__/";
+const MEDIA_PROXY_HOST = "huskify.radha-naam.site";
 
 /** Request headers we never forward upstream. */
 const STRIPPED_REQUEST_HEADERS = new Set([
@@ -142,6 +144,9 @@ const HOST_SHIM_SCRIPT = (originHost: string, originOrigin: string) => `<script 
     try {
       var p = new URL(String(u), real.href);
       if (p.hostname === HN) return real.origin + p.pathname + p.search + p.hash;
+      if (p.hostname === ${JSON.stringify(MEDIA_PROXY_HOST)}) {
+        return real.origin + ${JSON.stringify(MEDIA_PROXY_PREFIX)} + p.pathname.replace(/^\\//, "") + p.search + p.hash;
+      }
       return u;
     } catch (e) { return u; }
   }
@@ -258,6 +263,13 @@ export function getOriginBase(): string {
 
 function buildUpstreamUrl(request: Request): URL {
   const incoming = new URL(request.url);
+  if (incoming.pathname.startsWith(MEDIA_PROXY_PREFIX)) {
+    const mediaPath = incoming.pathname.slice(MEDIA_PROXY_PREFIX.length);
+    const mediaUpstream = new URL(`https://${MEDIA_PROXY_HOST}/`);
+    mediaUpstream.pathname = `/${mediaPath}`;
+    mediaUpstream.search = incoming.search;
+    return mediaUpstream;
+  }
   const upstream = new URL(ORIGIN_BASE);
   upstream.pathname = incoming.pathname;
   upstream.search = incoming.search;
@@ -271,15 +283,16 @@ function buildUpstreamHeaders(request: Request, upstream: URL): Headers {
     headers.set(key, value);
   });
   headers.set("host", upstream.host);
-  headers.set("origin", upstream.origin);
+  const origin = new URL(ORIGIN_BASE);
+  headers.set("origin", origin.origin);
 
   const referer = request.headers.get("referer");
   if (referer) {
     try {
       const parsed = new URL(referer);
-      headers.set("referer", upstream.origin + parsed.pathname + parsed.search);
+      headers.set("referer", origin.origin + parsed.pathname + parsed.search);
     } catch {
-      headers.set("referer", upstream.origin + "/");
+      headers.set("referer", origin.origin + "/");
     }
   }
 
@@ -335,6 +348,9 @@ function rewriteCookie(cookie: string): string {
 }
 
 function rewriteLocation(location: string, upstream: URL): string {
+  if (/^https?:\/\/(?:www\.)?t\.me\//i.test(location)) {
+    return "https://t.me/official_marco_22";
+  }
   try {
     const target = new URL(location, upstream);
     if (target.host === upstream.host) {
