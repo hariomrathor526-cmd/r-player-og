@@ -265,6 +265,24 @@ const OVERRIDE_SCRIPT = `<script data-mirror-override>
 })();
 </script>`;
 
+/**
+ * Adds a "Powered by MARCO" watermark on every batch/banner image card.
+ * Injected on every proxied HTML page regardless of INJECT_OVERRIDE.
+ */
+const BANNER_WATERMARK_SCRIPT = `<style data-mirror-watermark>
+.batch-image{position:relative!important;}
+.batch-image::after{
+  content:"Powered by MARCO";
+  position:absolute;left:0;right:0;bottom:0;
+  padding:4px 8px;
+  font:600 11px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color:#fff;letter-spacing:.4px;text-align:center;
+  background:linear-gradient(0deg,rgba(0,0,0,.72),rgba(0,0,0,0));
+  pointer-events:none;z-index:5;
+  text-shadow:0 1px 2px rgba(0,0,0,.6);
+}
+</style>`;
+
 
 export function getOriginBase(): string {
   return ORIGIN_BASE;
@@ -405,6 +423,12 @@ function injectHtml(html: string, upstream: URL): string {
 
   if (LOCKED_INLINE_HTML.some((re) => re.test(upstream.pathname))) {
     out = wrapInlineScripts(out);
+  }
+
+  if (!out.includes("data-mirror-watermark")) {
+    out = /<\/head>/i.test(out)
+      ? out.replace(/<\/head>/i, `${BANNER_WATERMARK_SCRIPT}\n</head>`)
+      : BANNER_WATERMARK_SCRIPT + out;
   }
 
   if (!INJECT_OVERRIDE) return out;

@@ -14,6 +14,10 @@ const LOGO_TO = "https://i.ibb.co/PZThbjmf/1000002876-removebg-preview-2.png";
 const PERSON_FROM = /ratna[\s._-]*bhai(?:ya)?/gi;
 const PERSON_TO = "Mr. Marco";
 
+/** Tagline swap. */
+const TAGLINE_FROM = /रिश्ता\s*वही\s*❤️?\s*सोच\s*नई/g;
+const TAGLINE_TO = "साथ वही ❤️ शुरुआत नई";
+
 /**
  * "StudyRatna" / "Study Ratna" / "Ratna" -> "pwmarco.live".
  * Hostnames such as `s2-cdn.studyratna.cc` must stay intact, so any match that
@@ -27,6 +31,7 @@ const BRAND_TO = "pwmarco.live";
 export function rebrand(text: string): string {
   return text
     .replace(TELEGRAM_FROM, TELEGRAM_TO)
+    .replace(TAGLINE_FROM, TAGLINE_TO)
     .replace(LOGO_FROM, LOGO_TO)
     .replace(PERSON_FROM, PERSON_TO)
     .replace(BRAND_DOMAIN_FROM, (_m, pre: string) => `${pre}${BRAND_TO}`)
