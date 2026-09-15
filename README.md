@@ -39,6 +39,7 @@ npm run dev
 
    ```sh
    heroku config:set ORIGIN_BASE=https://your-authorized-origin.example
+   heroku config:set PUBLIC_APP_ORIGIN=https://your-app.herokuapp.com
    ```
 
 3. Push the repository. Heroku will run `npm install`, `npm run build`, and the
@@ -66,6 +67,7 @@ npm run dev
 | Variable | Example | Purpose |
 | --- | --- | --- |
 | `ORIGIN_BASE` | `https://your-authorized-origin.example` | Upstream site/API base URL |
+| `PUBLIC_APP_ORIGIN` | `https://your-app.herokuapp.com` | Public URL sent to the upstream origin check |
 
 Keep provider keys, signed media URLs, and cookies out of Git. Add them with
 `heroku config:set` if the authorized upstream requires them.
