@@ -5,11 +5,11 @@
  * the future. This module freezes the mirror at the CURRENT origin state
  * (no gate at all) so those pages never reach our users.
  *
- * To turn the gate on later, set GATE_ENABLED to true.
+ * The upstream remains responsible for its own login and verification rules.
  */
 
-/** Master switch. false = every origin gate is blocked on the mirror. */
-export const GATE_ENABLED = false;
+/** Keep upstream authentication and verification enabled. */
+export const GATE_ENABLED = true;
 
 /**
  * Paths that are locked to their current state. Right now every one of these
@@ -45,20 +45,9 @@ export function isGateUrl(url: string, base: string): boolean {
   }
 }
 
-/** Cookies sent upstream so gate-aware backends treat us as already verified. */
-export const GATE_BYPASS_COOKIES = [
-  "task_verified=1",
-  "taskverify=1",
-  "verified=1",
-  "key_verified=1",
-  "is_verified=1",
-  "verification=done",
-  "access_granted=1",
-].join("; ");
-
 /**
- * Client-side guard injected into every proxied HTML page. Blocks navigations,
- * fetches and injected overlays that belong to a future gate.
+ * Retained as an exported compatibility value for existing imports. It is not
+ * injected while GATE_ENABLED is true.
  */
 export const GATE_GUARD_SCRIPT = `<script data-mirror-gate>
 (function(){

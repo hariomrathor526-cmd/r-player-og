@@ -1,15 +1,13 @@
 import { isRebrandable, rebrand } from "./mirror-branding";
 import { getOverrideUrl } from "./mirror-asset-overrides";
 import {
-  GATE_BYPASS_COOKIES,
   GATE_ENABLED,
-  GATE_GUARD_SCRIPT,
   isGatePath,
   isGateUrl,
 } from "./mirror-gate";
 
 /** Origin bundles that are domain-locked and must run inside the mirror scope. */
-const LOCKED_SCRIPTS = new Set(["/script-v40.js"]);
+const LOCKED_SCRIPTS = new Set<string>();
 
 /** Set to false to serve origin HTML completely untouched. */
 const INJECT_OVERRIDE = false;
@@ -24,6 +22,7 @@ const INJECT_OVERRIDE = false;
  */
 
 const ORIGIN_BASE = process.env.ORIGIN_BASE ?? "https://s2-cdn.studyratna.cc";
+const PUBLIC_APP_ORIGIN = process.env.PUBLIC_APP_ORIGIN ?? "";
 const MEDIA_PROXY_PREFIX = "/__media_proxy__/";
 // Hosts that should never be routed through the media proxy (same-origin app
 // paths or the origin host itself, which is handled by the main proxy).
@@ -195,7 +194,7 @@ function wrapLockedScript(source: string): string {
 
 
 /** Paths whose INLINE scripts are domain-locked and must run in the mirror scope. */
-const LOCKED_INLINE_HTML = [/^\/play\.php$/i, /player/i];
+const LOCKED_INLINE_HTML: RegExp[] = [];
 
 /**
  * Rewrites bare `location` reads inside inline origin scripts to the spoofed
@@ -333,26 +332,11 @@ function buildUpstreamHeaders(request: Request, upstream: URL): Headers {
     headers.set(key, value);
   });
   headers.set("host", upstream.host);
-  const origin = new URL(ORIGIN_BASE);
-  headers.set("origin", origin.origin);
 
-  if (!GATE_ENABLED) {
-    const existing = headers.get("cookie");
-    headers.set(
-      "cookie",
-      existing ? `${existing}; ${GATE_BYPASS_COOKIES}` : GATE_BYPASS_COOKIES,
-    );
-  }
-
-  const referer = request.headers.get("referer");
-  if (referer) {
-    try {
-      const parsed = new URL(referer);
-      headers.set("referer", origin.origin + parsed.pathname + parsed.search);
-    } catch {
-      headers.set("referer", origin.origin + "/");
-    }
-  }
+  // Forward the real browser origin. The upstream must explicitly authorize
+  // this value; never spoof its own origin to defeat an origin check.
+  const requestOrigin = request.headers.get("origin") ?? PUBLIC_APP_ORIGIN;
+  if (requestOrigin) headers.set("origin", requestOrigin);
 
   if (!headers.has("user-agent")) {
     headers.set(
@@ -432,21 +416,6 @@ function isHtml(response: Response): boolean {
 
 function injectHtml(html: string, upstream: URL): string {
   let out = html;
-
-  // Host shim must run before any origin script.
-  if (!out.includes("data-mirror-shim")) {
-    const shim = HOST_SHIM_SCRIPT(upstream.host, upstream.origin);
-    out = /<head[^>]*>/i.test(out)
-      ? out.replace(/<head[^>]*>/i, (m) => `${m}\n${shim}`)
-      : shim + out;
-  }
-
-  // Gate guard runs right after the host shim, before any origin script.
-  if (!GATE_ENABLED && !out.includes("data-mirror-gate")) {
-    out = /<head[^>]*>/i.test(out)
-      ? out.replace(/<head[^>]*>/i, (m) => `${m}\n${GATE_GUARD_SCRIPT}`)
-      : GATE_GUARD_SCRIPT + out;
-  }
 
   if (LOCKED_INLINE_HTML.some((re) => re.test(upstream.pathname))) {
     out = wrapInlineScripts(out);
