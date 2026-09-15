@@ -307,6 +307,25 @@ function buildUpstreamUrl(request: Request): URL {
   return upstream;
 }
 
+function isMediaProxyRequest(request: Request): boolean {
+  return new URL(request.url).pathname.startsWith(MEDIA_PROXY_PREFIX);
+}
+
+function applyProxyCors(headers: Headers, request: Request): void {
+  const requestOrigin = request.headers.get("origin") ?? new URL(request.url).origin;
+
+  // Media providers often echo the origin site here. That value is wrong after
+  // the response has passed through the mirror, so expose the mirror instead.
+  headers.set("access-control-allow-origin", requestOrigin);
+  headers.set("access-control-allow-methods", "GET, HEAD, OPTIONS");
+  headers.set(
+    "access-control-allow-headers",
+    "Range, Content-Type, Origin, Accept, Authorization, X-Requested-With",
+  );
+  headers.set("access-control-expose-headers", "Accept-Ranges, Content-Length, Content-Range, Content-Type");
+  headers.set("access-control-max-age", "86400");
+}
+
 function buildUpstreamHeaders(request: Request, upstream: URL): Headers {
   const headers = new Headers();
   request.headers.forEach((value, key) => {
@@ -345,7 +364,11 @@ function buildUpstreamHeaders(request: Request, upstream: URL): Headers {
   return headers;
 }
 
-function buildDownstreamHeaders(upstreamResponse: Response, upstream: URL): Headers {
+function buildDownstreamHeaders(
+  upstreamResponse: Response,
+  upstream: URL,
+  request: Request,
+): Headers {
   const headers = new Headers();
   upstreamResponse.headers.forEach((value, key) => {
     if (STRIPPED_RESPONSE_HEADERS.has(key.toLowerCase())) return;
@@ -375,6 +398,8 @@ function buildDownstreamHeaders(upstreamResponse: Response, upstream: URL): Head
   if (location) {
     headers.set("location", rewriteLocation(location, upstream));
   }
+
+  if (isMediaProxyRequest(request)) applyProxyCors(headers, request);
 
   return headers;
 }
@@ -447,6 +472,15 @@ export async function proxyRequest(request: Request): Promise<Response> {
   const method = request.method.toUpperCase();
   const hasBody = method !== "GET" && method !== "HEAD";
 
+  // The browser may preflight a media request when Range or other playback
+  // headers are present. Answer it at the mirror so the origin's CORS policy
+  // cannot block playback before the media request is sent.
+  if (method === "OPTIONS" && isMediaProxyRequest(request)) {
+    const headers = new Headers({ "content-length": "0" });
+    applyProxyCors(headers, request);
+    return new Response(null, { status: 204, headers });
+  }
+
   // Locked gate paths: frozen at their current (non-existent) origin state.
   if (!GATE_ENABLED && isGatePath(upstream.pathname)) {
     if (method === "GET" || method === "HEAD") {
@@ -478,7 +512,7 @@ export async function proxyRequest(request: Request): Promise<Response> {
     return new Response("Upstream unavailable", { status: 502 });
   }
 
-  const headers = buildDownstreamHeaders(upstreamResponse, upstream);
+  const headers = buildDownstreamHeaders(upstreamResponse, upstream, request);
 
   // Never let the origin redirect our users into a future gate page.
   if (!GATE_ENABLED && upstreamResponse.status >= 300 && upstreamResponse.status < 400) {
