@@ -38,7 +38,7 @@ npm run dev
 2. Set the upstream origin as a config variable. Do not put it in source code:
 
    ```sh
-   heroku config:set ORIGIN_BASE=https://r-player-ogr-phi.vercel.app
+   heroku config:set ORIGIN_BASE=https://s2-cdn.studyratna.cc
    heroku config:set PUBLIC_APP_ORIGIN=https://r-player-ogr-phi.vercel.app
    ```
 
@@ -66,7 +66,7 @@ npm run dev
 
 | Variable | Example | Purpose |
 | --- | --- | --- |
-| `ORIGIN_BASE` | `https://r-player-ogr-phi.vercel.app` | Upstream site/API base URL |
+| `ORIGIN_BASE` | `https://s2-cdn.studyratna.cc` | Upstream site/API base URL |
 | `PUBLIC_APP_ORIGIN` | `https://r-player-ogr-phi.vercel.app` | Public URL sent to the upstream origin check |
 
 Keep provider keys, signed media URLs, and cookies out of Git. Add them with
