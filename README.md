@@ -39,7 +39,7 @@ npm run dev
 
    ```sh
    heroku config:set ORIGIN_BASE=https://s2-cdn.studyratna.cc
-   heroku config:set PUBLIC_APP_ORIGIN=https://r-player-ogr-phi.vercel.app
+   heroku config:set PUBLIC_APP_ORIGIN=https://r-player-og-dncd.vercel.app
    ```
 
 3. Push the repository. Heroku will run `npm install`, `npm run build`, and the
@@ -67,7 +67,7 @@ npm run dev
 | Variable | Example | Purpose |
 | --- | --- | --- |
 | `ORIGIN_BASE` | `https://s2-cdn.studyratna.cc` | Upstream site/API base URL |
-| `PUBLIC_APP_ORIGIN` | `https://r-player-ogr-phi.vercel.app` | Public URL sent to the upstream origin check |
+| `PUBLIC_APP_ORIGIN` | `https://r-player-og-dncd.vercel.app` | Public URL sent to the upstream origin check |
 
 Keep provider keys, signed media URLs, and cookies out of Git. Add them with
 `heroku config:set` if the authorized upstream requires them.
